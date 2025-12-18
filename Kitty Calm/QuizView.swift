@@ -16,7 +16,7 @@ struct QuizQuestion {
 
 struct QuizView: View {
     @EnvironmentObject private var themeManager: ThemeManager
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) private var presentationMode
     
     @State private var questions: [QuizQuestion] = QuizView.makeQuestions()
     @State private var currentIndex: Int = 0
@@ -34,7 +34,9 @@ struct QuizView: View {
                 .ignoresSafeArea()
             
             if showResult {
-                QuizResultView(onDone: { dismiss() })
+                QuizResultView(onDone: {
+                    presentationMode.wrappedValue.dismiss()
+                })
             } else {
                 VStack(spacing: 24) {
                     Text("Cat Curious Quiz")
@@ -104,13 +106,7 @@ struct QuizView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Cat Quiz")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
-            }
-        }
+        .navigationBarTitle("Cat Quiz", displayMode: .inline)
     }
     
     private static func makeQuestions() -> [QuizQuestion] {
@@ -153,7 +149,7 @@ struct QuizView: View {
             ),
             
             QuizQuestion(
-                question: "What do a cat’s whiskers help them with?",
+                question: "What do a cat's whiskers help them with?",
                 options: [
                     "Smelling food",
                     "Measuring space and movement",

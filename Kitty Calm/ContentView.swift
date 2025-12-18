@@ -15,9 +15,8 @@ struct ContentView: View {
     @State private var showSettings = false
     private let backgroundColors = ThemeManager.pastelBackgrounds
     
-    
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 // Background
                 themeManager.backgroundColor
@@ -33,7 +32,7 @@ struct ContentView: View {
                                 .environmentObject(kittenViewModel)
                                 .frame(width: geometry.size.width, height: geometry.size.height * 0.5)
                                 .zIndex(0)
-                                            }
+                        }
                         
                         Spacer()
                         
@@ -95,12 +94,17 @@ struct ContentView: View {
                         }
                     }
                 }
-            }
-            .navigationDestination(isPresented: $showGallery) {
-                GalleryView()
-            }
-            .navigationDestination(isPresented: $showQuiz) {
-                QuizView()
+                
+                // Navigation Links (hidden)
+                NavigationLink(destination: GalleryView(), isActive: $showGallery) {
+                    EmptyView()
+                }
+                .hidden()
+                
+                NavigationLink(destination: QuizView(), isActive: $showQuiz) {
+                    EmptyView()
+                }
+                .hidden()
             }
             .sheet(isPresented: $showSettings) {
                 BackgroundColorPickerView(
@@ -117,6 +121,7 @@ struct ContentView: View {
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .preferredColorScheme(.light)
     }
 }
@@ -127,7 +132,7 @@ struct BackgroundColorPickerView: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 Color(red: 0.96, green: 0.94, blue: 0.90)
                     .ignoresSafeArea()
@@ -198,9 +203,11 @@ struct BackgroundColorPickerView: View {
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(ThemeManager())
 }
