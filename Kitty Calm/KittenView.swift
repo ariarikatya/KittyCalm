@@ -10,59 +10,106 @@ import AVFoundation
 import UIKit
 
 struct KittenView: View {
+
     @EnvironmentObject var viewModel: KittenViewModel
+
+    // MARK: - Visual state
+    @State private var currentPose: MascotPose = .seated
     @State private var baseScale: CGFloat = 1.0
     @State private var rotation: Double = 0
-    @State private var currentPose: MascotPose = .seated
-    @State private var isAnimating: Bool = false
-    @State private var lastAnimation: AnimationKind = .none
+    @State private var tailAngle: Double = 0
+
+    // MARK: - Interaction state
+    @State private var isAnimating = false
+    @State private var isPetting = false
+
+    // MARK: - Audio & Haptics
     private let haptic = UIImpactFeedbackGenerator(style: .soft)
-    @State private var audioPlayer: AVAudioPlayer?
-    
+    @State private var purrPlayer: AVAudioPlayer?
+
+    // MARK: - Tasks
+    @State private var blinkTask: Task<Void, Never>?
+
+    // MARK: - Random tap poses
+    private let tapPoses: [MascotPose] = [
+        .shy,
+        .happy,
+        .surprised,
+        .wavingHand,
+        .helloWave,
+        .sleeping,
+        .wavingHands
+    ]
+
     var body: some View {
         GeometryReader { geometry in
             let kittenHeight = min(geometry.size.height * 0.6, 360)
-            
-            ZStack(alignment: .top) {
 
+            ZStack {
+
+                // MARK: - Tail (behind kitten)
+                Image("tail_idle")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: kittenHeight * 0.4)
+                    .offset(x: 40, y: kittenHeight * 0.25)
+                    .rotationEffect(.degrees(tailAngle), anchor: .bottom)
+
+                // MARK: - Kitten
                 Image(currentPose.imageName)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: kittenHeight * currentPose.baseHeightMultiplier)
+                    .frame(height: kittenHeight * currentPose.heightMultiplier)
                     .scaleEffect(baseScale)
                     .rotationEffect(.degrees(rotation))
 
+                // MARK: - Accessories
+                accessoriesView
+
+                // MARK: - Thought bubble
                 if viewModel.showThoughtBubble {
                     ThoughtBubble(text: viewModel.currentThought)
-                        .offset(y: -kittenHeight * 0.55)
-                        .transition(.scale.combined(with: .opacity))
+                        .offset(y: -kittenHeight * 0.75)
+                        .transition(.opacity.combined(with: .scale))
                 }
-                
-                accessoriesView
-                    .frame(height: kittenHeight)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
-            .highPriorityGesture(
-                TapGesture(count: 2)
-                    .onEnded { handleDoubleTap() }
+
+            // MARK: - Tap (random animation)
+            .onTapGesture {
+                handleTap()
+            }
+
+            // MARK: - Petting (drag = purr)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isPetting {
+                            isPetting = true
+                            startPurring()
+                            haptic.impactOccurred()
+                        }
+                    }
+                    .onEnded { _ in
+                        stopPurring()
+                        isPetting = false
+                    }
             )
-            .simultaneousGesture(
-                TapGesture()
-                    .onEnded { handleSingleTap() }
-            )
+
+            // MARK: - Idle animations
             .onAppear {
-                withAnimation(
-                    .easeInOut(duration: 2.8)
-                    .repeatForever(autoreverses: true)
-                ) {
-                    baseScale = 1.03
-                }
+                startBreathing()
+                startTailWag()
+                startBlinking()
+            }
+            .onDisappear {
+                blinkTask?.cancel()
             }
         }
     }
-    
-    // MARK: - Accessories View (overlays, not part of mascot drawing)
+
+    // MARK: - Accessories View
     private var accessoriesView: some View {
         ZStack {
             if viewModel.showGlasses {
@@ -70,14 +117,14 @@ struct KittenView: View {
                     .resizable()
                     .scaledToFit()
             }
-            
+
             if viewModel.showHat {
                 Image("hat_overlay")
                     .resizable()
                     .scaledToFit()
                     .offset(y: -40)
             }
-            
+
             if viewModel.showCollar {
                 Image("collar_overlay")
                     .resizable()
@@ -87,107 +134,89 @@ struct KittenView: View {
         }
         .allowsHitTesting(false)
     }
-    
-    
-    // MARK: - Gesture Handlers (exactly one animation per tap)
-    func handleSingleTap() {
-        runAnimation(kind: .singleTap, duration: 0.35) {
-            currentPose = .shy
-            baseScale = 1.04
-        } reset: {
-            currentPose = .seated
-            baseScale = 1.0
-            rotation = 0
-        }
-        
-        viewModel.showThought()
-    }
-    
-    func handleDoubleTap() {
-        runAnimation(kind: .doubleTap, duration: 0.4) {
-            currentPose = .wavingHands
-            rotation = 6
-        } reset: {
-            currentPose = .seated
-            baseScale = 1.0
-            rotation = 0
-        }
-        
-        viewModel.showThought()
-    }
-    
-    private func runAnimation(kind: AnimationKind, duration: Double, changes: @escaping () -> Void, reset: @escaping () -> Void) {
+
+    // MARK: - Tap animation
+    private func handleTap() {
         guard !isAnimating else { return }
         isAnimating = true
-        lastAnimation = kind
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.6)) {
-            changes()
+
+        let randomPose = tapPoses.randomElement() ?? .shy
+
+        withAnimation(.spring(response: 1.0, dampingFraction: 0.65)) {
+            currentPose = randomPose
+            baseScale = 1.08
+            rotation = Double.random(in: -6...6)
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                reset()
+
+        viewModel.showThought()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.spring()) {
+                currentPose = .seated
+                baseScale = 1.0
+                rotation = 0
             }
             isAnimating = false
         }
     }
-}
 
-// MARK: - Mascot Pose
-private enum MascotPose {
-    case seated
-    case shy
-    case surprised
-    case sleeping
-    case wavingHand
-    case happy
-    case helloWave
-    case wavingHands
-    
-    var imageName: String {
-        switch self {
-        case .seated:
-            return "kitten"
-        case .shy:
-            return "shy"
-        case .surprised:
-            return "surprised"
-        case .sleeping:
-            return "sleeping"
-        case .wavingHand:
-            return "waving_hand"
-        case .happy:
-            return "happy"
-        case .helloWave:
-            return "hello_wave"
-        case .wavingHands:
-            return "waving_hands"
+    // MARK: - Breathing
+    private func startBreathing() {
+        withAnimation(
+            .easeInOut(duration: 2.8)
+                .repeatForever(autoreverses: true)
+        ) {
+            baseScale = 1.03
         }
     }
-    
-    // Adjusts relative visual size without changing asset files
-    var baseHeightMultiplier: CGFloat {
-        switch self {
-        case .seated:
-            return 1.12
-        default:
-            return 1.0
-        }
-    }
-    
-    var baseScale: CGFloat {
-        switch self {
-        case .seated:
-            return 1.02
-        default:
-            return 1.0
-        }
-    }
-}
 
-private enum AnimationKind {
-    case none
-    case singleTap
-    case doubleTap
+    // MARK: - Tail wag
+    private func startTailWag() {
+        withAnimation(
+            .easeInOut(duration: 1.8)
+                .repeatForever(autoreverses: true)
+        ) {
+            tailAngle = 12
+        }
+    }
+
+    // MARK: - Blinking
+    private func startBlinking() {
+        blinkTask?.cancel()
+
+        blinkTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(
+                    nanoseconds: UInt64.random(in: 3_000_000_000...6_000_000_000)
+                )
+
+                guard !isAnimating else { continue }
+
+                await MainActor.run {
+                    currentPose = .blink
+                }
+
+                try? await Task.sleep(nanoseconds: 160_000_000)
+
+                await MainActor.run {
+                    currentPose = .seated
+                }
+            }
+        }
+    }
+
+    // MARK: - Purring
+    private func startPurring() {
+        guard let url = Bundle.main.url(forResource: "purr", withExtension: "mp3") else { return }
+
+        purrPlayer = try? AVAudioPlayer(contentsOf: url)
+        purrPlayer?.numberOfLoops = -1
+        purrPlayer?.volume = 0.35
+        purrPlayer?.play()
+    }
+
+    private func stopPurring() {
+        purrPlayer?.stop()
+        purrPlayer = nil
+    }
 }

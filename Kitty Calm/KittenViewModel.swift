@@ -11,9 +11,9 @@ import Combine
 class KittenViewModel: ObservableObject {
     @Published var showThoughtBubble: Bool = false
     @Published var currentThought: String = ""
-    @Published var showGlasses: Bool = false
-    @Published var showHat: Bool = false
-    @Published var showCollar: Bool = false
+    @State private var showHearts = false
+    @State private var showStars = false
+    @State private var showPurring = false
     
     private var lastThought: String?
     
