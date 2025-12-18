@@ -1,10 +1,3 @@
-//
-//  Kitty_CalmUITests.swift
-//  Kitty CalmUITests
-//
-//  Created by Екатерина Аристова on 18.12.2025.
-//
-
 import XCTest
 
 final class Kitty_CalmUITests: XCTestCase {

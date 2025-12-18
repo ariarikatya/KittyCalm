@@ -1,9 +1,3 @@
-//
-//  SplashView.swift
-//  Kitty Calm
-//
-//  Created by Екатерина Аристова on 18.12.2025.
-//
 import SwiftUI
 
 struct SplashView: View {
@@ -14,10 +8,10 @@ struct SplashView: View {
 
     var body: some View {
         if isActive {
-            ContentView() // ← ТВОЙ основной экран
+            ContentView()
         } else {
             ZStack {
-                // фон (можно заменить на ThemeManager)
+                
                 themeManager.backgroundColor
                     .ignoresSafeArea()
 
@@ -41,7 +35,7 @@ struct SplashView: View {
             opacity = 1.0
         }
 
-        // дыхание
+       
         withAnimation(
             .easeInOut(duration: 2.6)
             .repeatForever(autoreverses: true)

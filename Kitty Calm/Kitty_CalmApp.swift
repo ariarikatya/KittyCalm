@@ -1,10 +1,3 @@
-//
-//  Kitty_CalmApp.swift
-//  Kitty Calm
-//
-//  Created by Екатерина Аристова on 18.12.2025.
-//
-
 import SwiftUI
 
 @main

@@ -1,5 +1,5 @@
 import SwiftUI
-import Combine   // ← ВАЖНО
+import Combine  
 
 final class ThemeManager: ObservableObject {
     @Published var backgroundColor: Color = Color(red: 0.98, green: 0.97, blue: 0.92)

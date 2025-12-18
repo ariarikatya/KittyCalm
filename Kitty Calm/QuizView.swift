@@ -1,10 +1,3 @@
-//
-//  QuizView.swift
-//  Kitty Calm
-//
-//  Created by ChatGPT on 18.12.2025.
-//
-
 import SwiftUI
 
 struct QuizQuestion {

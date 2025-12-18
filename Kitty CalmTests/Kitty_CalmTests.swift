@@ -1,10 +1,3 @@
-//
-//  Kitty_CalmTests.swift
-//  Kitty CalmTests
-//
-//  Created by Екатерина Аристова on 18.12.2025.
-//
-
 import Testing
 
 struct Kitty_CalmTests {

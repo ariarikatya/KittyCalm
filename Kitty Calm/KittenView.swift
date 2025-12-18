@@ -1,10 +1,3 @@
-//
-//  KittenView.swift
-//  Kitty Calm
-//
-//  Created by Екатерина Аристова on 18.12.2025.
-//
-
 import SwiftUI
 import AVFoundation
 import UIKit
@@ -80,7 +73,7 @@ var body: some View {
                 animationState = .idle
                 print("✅ Purring stopped via tap")
             } else if animationState == .purring {
-                // Если застряли в purring без viewModel.isPurring
+                
                 stopPurring()
                 animationState = .idle
                 print("✅ Reset from stuck purring state")
@@ -182,8 +175,8 @@ private func handleTap() {
     
     viewModel.showThought()
     
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [self] in
-        guard animationState == .interacting else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        guard self.animationState == .interacting else { return }
         
         withAnimation(.spring()) {
             currentPose = .seated
@@ -191,7 +184,7 @@ private func handleTap() {
             rotation = 0
         }
         
-        // Даём время анимации завершиться
+        
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             animationState = .idle
         }
@@ -252,7 +245,7 @@ private func stopPurring() {
 }
 
 }
-// MARK: - Hearts Effect (с иконками вместо эмодзи)
+// MARK: - Hearts Effect
 struct HeartsEffect: View {
     @State private var hearts: [HeartParticle] = []
     @State private var timer: Timer?
@@ -310,7 +303,7 @@ struct HeartParticle: Identifiable {
     var scale: CGFloat = 1.0
 }
 
-// MARK: - Stars Effect (с иконками вместо эмодзи)
+// MARK: - Stars Effect 
 struct StarsEffect: View {
     @State private var stars: [StarParticle] = []
     @State private var timer: Timer?
