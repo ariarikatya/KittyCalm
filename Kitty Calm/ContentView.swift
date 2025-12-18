@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @EnvironmentObject private var themeManager: ThemeManager
@@ -110,7 +111,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .principal) {
                     Text("Kitty Calm")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        .foregroundColor(AppConstants.Colors.textPrimary)
                 }
             }
         }
@@ -127,14 +128,15 @@ struct BackgroundColorPickerView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color(red: 0.96, green: 0.94, blue: 0.90)
+                AppConstants.Colors.backgroundBeige
                     .ignoresSafeArea()
                 
                 VStack(spacing: 20) {
                     Text("Choose Background")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        .foregroundColor(AppConstants.Colors.textPrimary)
                         .padding(.top, 40)
+                        .accessibilityAddTraits(.isHeader)
                     
                     ForEach(colors, id: \.name) { colorOption in
                         Button(action: {
@@ -152,13 +154,13 @@ struct BackgroundColorPickerView: View {
                                 
                                 Text(colorOption.name)
                                     .font(.system(size: 18, weight: .medium, design: .rounded))
-                                    .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                    .foregroundColor(AppConstants.Colors.textPrimary)
                                 
                                 Spacer()
                                 
-                                if selectedColor == colorOption.color {
+                                if areColorsSimilar(selectedColor, colorOption.color) {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(Color(red: 0.4, green: 0.6, blue: 0.9))
+                                        .foregroundColor(AppConstants.Colors.checkmarkBlue)
                                         .font(.system(size: 24))
                                 }
                             }
@@ -171,6 +173,8 @@ struct BackgroundColorPickerView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .padding(.horizontal, 20)
+                        .accessibilityLabel("\(colorOption.name) background color")
+                        .accessibilityHint(areColorsSimilar(selectedColor, colorOption.color) ? "Currently selected" : "Tap to select")
                     }
                     
                     Spacer()
@@ -189,14 +193,35 @@ struct BackgroundColorPickerView: View {
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color(red: 0.75, green: 0.84, blue: 0.96))
+                                    .fill(AppConstants.Colors.buttonBlue)
                             )
+                            .accessibilityLabel("Done")
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+    }
+    
+    // Helper function to compare colors more reliably
+    private func areColorsSimilar(_ color1: Color, _ color2: Color) -> Bool {
+        // Use UIColor comparison which is more reliable than Color
+        let uiColor1 = UIColor(color1)
+        let uiColor2 = UIColor(color2)
+        
+        var red1: CGFloat = 0, green1: CGFloat = 0, blue1: CGFloat = 0, alpha1: CGFloat = 0
+        var red2: CGFloat = 0, green2: CGFloat = 0, blue2: CGFloat = 0, alpha2: CGFloat = 0
+        
+        uiColor1.getRed(&red1, green: &green1, blue: &blue1, alpha: &alpha1)
+        uiColor2.getRed(&red2, green: &green2, blue: &blue2, alpha: &alpha2)
+        
+        // Compare with small tolerance for floating point precision
+        let tolerance: CGFloat = 0.01
+        return abs(red1 - red2) < tolerance &&
+               abs(green1 - green2) < tolerance &&
+               abs(blue1 - blue2) < tolerance &&
+               abs(alpha1 - alpha2) < tolerance
     }
 }
 

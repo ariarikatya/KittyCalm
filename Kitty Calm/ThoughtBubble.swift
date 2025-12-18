@@ -8,7 +8,7 @@ struct ThoughtBubble: View {
 
             Text(text)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
-                .foregroundColor(.black.opacity(0.85))
+                .foregroundColor(AppConstants.Colors.textPrimary.opacity(0.85))
                 .padding(.horizontal, 24)
                 .padding(.vertical, 14)
                 .background(

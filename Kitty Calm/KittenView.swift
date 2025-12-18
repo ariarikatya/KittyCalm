@@ -14,13 +14,8 @@ struct KittenView: View {
 // MARK: - Visual state
 @State private var currentPose: MascotPose = .seated
 @State private var baseScale: CGFloat = 1.0
-@State private var breathingScale: CGFloat = 1.0
 @State private var rotation: Double = 0
 @State private var animationState: MascotAnimationState = .idle
-
-// MARK: - Interaction state
-@State private var isAnimating = false
-@State private var isPetting = false
 
 // MARK: - Audio & Haptics
 private let haptic = UIImpactFeedbackGenerator(style: .soft)
@@ -29,7 +24,7 @@ private let haptic = UIImpactFeedbackGenerator(style: .soft)
 
 // MARK: - Tasks
 @State private var blinkTask: Task<Void, Never>?
-@State private var stateResetTask: Task<Void, Never>?
+@State private var tapAnimationTask: Task<Void, Never>?
 
 private let tapPoses: [MascotPose] = [
     .shy, .happy, .surprised, .wavingHand,
@@ -38,7 +33,7 @@ private let tapPoses: [MascotPose] = [
 
 var body: some View {
     GeometryReader { geometry in
-        let kittenHeight = min(geometry.size.height * 0.6, 360)
+        let kittenHeight = min(geometry.size.height * AppConstants.Layout.kittenHeightMultiplier, AppConstants.Layout.kittenMaxHeight)
         
         ZStack {
             Image(viewModel.isPurring ? "purring" : currentPose.imageName)
@@ -47,6 +42,7 @@ var body: some View {
                 .frame(height: kittenHeight * currentPose.heightMultiplier)
                 .scaleEffect(baseScale)
                 .rotationEffect(.degrees(rotation))
+                .accessibilityLabel(viewModel.isPurring ? "Kitten purring" : "Kitten \(currentPose.imageName)")
             
             if viewModel.showHearts {
                 HeartsEffect()
@@ -58,25 +54,23 @@ var body: some View {
             
             if viewModel.showThoughtBubble {
                 ThoughtBubble(text: viewModel.currentThought)
-                    .offset(y: -kittenHeight * 0.75)
+                    .offset(y: -kittenHeight * AppConstants.Layout.thoughtBubbleOffset)
                     .transition(.opacity.combined(with: .scale))
+                    .accessibilityLabel("Kitten thought: \(viewModel.currentThought)")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Tap to interact with the kitten")
         .onTapGesture {
-            print("🔵 Tap detected - current state: \(animationState)")
-            
             if viewModel.isPurring {
                 viewModel.isPurring = false
                 stopPurring()
                 animationState = .idle
-                print("✅ Purring stopped via tap")
             } else if animationState == .purring {
-                
                 stopPurring()
                 animationState = .idle
-                print("✅ Reset from stuck purring state")
             } else {
                 handleTap()
             }
@@ -94,21 +88,18 @@ var body: some View {
                     if !viewModel.isPurring {
                         stopPurring()
                         animationState = .idle
-                        print("✅ Drag ended - ready for taps")
                     }
-                    isPetting = false
                 }
         )
         .onAppear {
             setupAudioSession()
-            startBreathing()
+            haptic.prepare()
             startBlinking()
         }
         .onDisappear {
             cleanup()
         }
         .onChange(of: viewModel.isPurring) { newValue in
-            print("🟡 isPurring changed to: \(newValue)")
             if newValue {
                 if animationState != .purring {
                     animationState = .purring
@@ -130,7 +121,7 @@ private func setupAudioSession() {
         try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         try AVAudioSession.sharedInstance().setActive(true)
     } catch {
-        print("Failed to setup audio session: \(error)")
+        // Audio session setup failed - silent fail to avoid disrupting user experience
     }
     
     audioInterruptionObserver = NotificationCenter.default.addObserver(
@@ -152,8 +143,14 @@ private func setupAudioSession() {
 
 private func cleanup() {
     blinkTask?.cancel()
-    stateResetTask?.cancel()
+    tapAnimationTask?.cancel()
     stopPurring()
+    
+    do {
+        try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    } catch {
+        // Silent fail - session may already be inactive
+    }
     
     if let observer = audioInterruptionObserver {
         NotificationCenter.default.removeObserver(observer)
@@ -164,19 +161,23 @@ private func cleanup() {
 private func handleTap() {
     guard animationState == .idle else { return }
     
+    tapAnimationTask?.cancel()
+    
     animationState = .interacting
     let randomPose = tapPoses.randomElement() ?? .shy
     
     withAnimation(.spring(response: 1.0, dampingFraction: 0.65)) {
         currentPose = randomPose
-        baseScale = 1.08
-        rotation = Double.random(in: -6...6)
+        baseScale = AppConstants.Layout.tapScale
+        rotation = Double.random(in: AppConstants.Layout.tapRotationRange)
     }
     
     viewModel.showThought()
     
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-        guard self.animationState == .interacting else { return }
+    tapAnimationTask = Task { @MainActor in
+        try? await Task.sleep(nanoseconds: UInt64(AppConstants.AnimationDuration.tapAnimation * 1_000_000_000))
+        
+        guard !Task.isCancelled, animationState == .interacting else { return }
         
         withAnimation(.spring()) {
             currentPose = .seated
@@ -184,22 +185,13 @@ private func handleTap() {
             rotation = 0
         }
         
+        try? await Task.sleep(nanoseconds: UInt64(AppConstants.AnimationDuration.tapReset * 1_000_000_000))
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            animationState = .idle
-        }
+        guard !Task.isCancelled else { return }
+        animationState = .idle
     }
 }
 
-// MARK: - Breathing
-private func startBreathing() {
-    withAnimation(
-        .easeInOut(duration: 2.8)
-            .repeatForever(autoreverses: true)
-    ) {
-        breathingScale = 1.03
-    }
-}
 
 // MARK: - Blinking
 private func startBlinking() {
@@ -207,14 +199,15 @@ private func startBlinking() {
     
     blinkTask = Task { @MainActor in
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: UInt64.random(in: 4_000_000_000...8_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64.random(in: AppConstants.AnimationDuration.blinkIntervalMin...AppConstants.AnimationDuration.blinkIntervalMax))
             
-            guard animationState == .idle else { continue }
+            guard !Task.isCancelled, animationState == .idle else { continue }
             
             currentPose = .blink
             
-            try? await Task.sleep(nanoseconds: 220_000_000)
+            try? await Task.sleep(nanoseconds: AppConstants.AnimationDuration.blinkDuration)
             
+            guard !Task.isCancelled else { return }
             currentPose = .seated
         }
     }
@@ -222,20 +215,24 @@ private func startBlinking() {
 
 // MARK: - Purring Audio
 private func startPurring() {
-    guard purrPlayer == nil else { return }
-    guard let url = Bundle.main.url(forResource: "purr", withExtension: "mp3") else {
-        print("Purr sound file not found")
+    if purrPlayer != nil { return }
+    
+    guard let url = Bundle.main.url(forResource: AppConstants.Audio.purrFileName, withExtension: AppConstants.Audio.purrFileExtension) else {
         return
     }
     
     do {
-        purrPlayer = try AVAudioPlayer(contentsOf: url)
-        purrPlayer?.numberOfLoops = -1
-        purrPlayer?.volume = 0.5
-        purrPlayer?.prepareToPlay()
-        purrPlayer?.play()
+        let player = try AVAudioPlayer(contentsOf: url)
+        player.numberOfLoops = -1
+        player.volume = AppConstants.Audio.purrVolume
+        player.prepareToPlay()
+        
+        if purrPlayer == nil {
+            purrPlayer = player
+            player.play()
+        }
     } catch {
-        print("Error playing purr sound: \(error)")
+        // Audio playback failed - silent fail to avoid disrupting user experience
     }
 }
 
@@ -249,6 +246,9 @@ private func stopPurring() {
 struct HeartsEffect: View {
     @State private var hearts: [HeartParticle] = []
     @State private var timer: Timer?
+    @State private var cleanupTasks: [UUID: Task<Void, Never>] = [:]
+    
+    private let maxHearts = AppConstants.Particles.maxCount
     
     var body: some View {
         ZStack {
@@ -267,19 +267,29 @@ struct HeartsEffect: View {
         .onDisappear {
             timer?.invalidate()
             timer = nil
+            cleanupTasks.values.forEach { $0.cancel() }
+            cleanupTasks.removeAll()
         }
     }
     
     private func startHeartAnimation() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: AppConstants.Particles.heartInterval, repeats: true) { _ in
+            if hearts.count >= maxHearts {
+                if let oldest = hearts.first {
+                    hearts.removeAll { $0.id == oldest.id }
+                    cleanupTasks[oldest.id]?.cancel()
+                    cleanupTasks.removeValue(forKey: oldest.id)
+                }
+            }
+            
             let newHeart = HeartParticle(
-                x: CGFloat.random(in: -120...120),
-                y: CGFloat.random(in: -150...150),
-                size: CGFloat.random(in: 20...40)
+                x: CGFloat.random(in: AppConstants.Particles.heartXRange),
+                y: CGFloat.random(in: AppConstants.Particles.heartYRange),
+                size: CGFloat.random(in: AppConstants.Particles.heartSizeRange)
             )
             hearts.append(newHeart)
             
-            withAnimation(.easeOut(duration: 2.0)) {
+            withAnimation(.easeOut(duration: AppConstants.AnimationDuration.heartFade)) {
                 if let index = hearts.firstIndex(where: { $0.id == newHeart.id }) {
                     hearts[index].opacity = 0
                     hearts[index].y -= 50
@@ -287,9 +297,17 @@ struct HeartsEffect: View {
                 }
             }
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                hearts.removeAll { $0.id == newHeart.id }
+            let heartId = newHeart.id
+            cleanupTasks[heartId] = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(AppConstants.AnimationDuration.heartFade * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                hearts.removeAll { $0.id == heartId }
+                cleanupTasks.removeValue(forKey: heartId)
             }
+        }
+        
+        if let timer = timer {
+            RunLoop.current.add(timer, forMode: .common)
         }
     }
 }
@@ -307,6 +325,9 @@ struct HeartParticle: Identifiable {
 struct StarsEffect: View {
     @State private var stars: [StarParticle] = []
     @State private var timer: Timer?
+    @State private var cleanupTasks: [UUID: Task<Void, Never>] = [:]
+    
+    private let maxStars = AppConstants.Particles.maxCount
     
     var body: some View {
         ZStack {
@@ -326,19 +347,29 @@ struct StarsEffect: View {
         .onDisappear {
             timer?.invalidate()
             timer = nil
+            cleanupTasks.values.forEach { $0.cancel() }
+            cleanupTasks.removeAll()
         }
     }
     
     private func startStarAnimation() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: AppConstants.Particles.starInterval, repeats: true) { _ in
+            if stars.count >= maxStars {
+                if let oldest = stars.first {
+                    stars.removeAll { $0.id == oldest.id }
+                    cleanupTasks[oldest.id]?.cancel()
+                    cleanupTasks.removeValue(forKey: oldest.id)
+                }
+            }
+            
             let newStar = StarParticle(
-                x: CGFloat.random(in: -120...120),
-                y: CGFloat.random(in: -150...150),
-                size: CGFloat.random(in: 18...35)
+                x: CGFloat.random(in: AppConstants.Particles.starXRange),
+                y: CGFloat.random(in: AppConstants.Particles.starYRange),
+                size: CGFloat.random(in: AppConstants.Particles.starSizeRange)
             )
             stars.append(newStar)
             
-            withAnimation(.easeInOut(duration: 1.8)) {
+            withAnimation(.easeInOut(duration: AppConstants.AnimationDuration.starFade)) {
                 if let index = stars.firstIndex(where: { $0.id == newStar.id }) {
                     stars[index].opacity = 0
                     stars[index].rotation = 360
@@ -346,9 +377,17 @@ struct StarsEffect: View {
                 }
             }
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                stars.removeAll { $0.id == newStar.id }
+            let starId = newStar.id
+            cleanupTasks[starId] = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(AppConstants.AnimationDuration.starFade * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                stars.removeAll { $0.id == starId }
+                cleanupTasks.removeValue(forKey: starId)
             }
+        }
+        
+        if let timer = timer {
+            RunLoop.current.add(timer, forMode: .common)
         }
     }
 }

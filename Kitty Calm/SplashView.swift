@@ -4,6 +4,7 @@ struct SplashView: View {
     @State private var scale: CGFloat = 0.85
     @State private var opacity: Double = 0.0
     @State private var isActive = false
+    @State private var proceedTask: Task<Void, Never>?
     @EnvironmentObject private var themeManager: ThemeManager
 
     var body: some View {
@@ -21,10 +22,14 @@ struct SplashView: View {
                     .frame(width: 280)
                     .scaleEffect(scale)
                     .opacity(opacity)
+                    .accessibilityLabel("Kitty Calm app logo")
             }
             .onAppear {
                 animateLogo()
                 proceedToApp()
+            }
+            .onDisappear {
+                proceedTask?.cancel()
             }
         }
     }
@@ -45,7 +50,13 @@ struct SplashView: View {
     }
 
     private func proceedToApp() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        proceedTask?.cancel()
+        
+        proceedTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            
+            guard !Task.isCancelled else { return }
+            
             withAnimation(.easeInOut(duration: 0.4)) {
                 isActive = true
             }

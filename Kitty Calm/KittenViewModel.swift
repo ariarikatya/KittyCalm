@@ -5,32 +5,43 @@ class KittenViewModel: ObservableObject {
     @Published var showThoughtBubble: Bool = false
     @Published var currentThought: String = ""
     @Published var showHearts: Bool = false
-        @Published var showStars: Bool = false
-        @Published var isPurring: Bool = false
+    @Published var showStars: Bool = false
+    @Published var isPurring: Bool = false
     
     private var lastThought: String?
+    private var thoughtTask: Task<Void, Never>?
+    
+    func showThought() {
+        thoughtTask?.cancel()
         
-        func showThought() {
-            if showThoughtBubble {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    showThoughtBubble = false
-                }
+        if showThoughtBubble {
+            withAnimation(.easeOut(duration: AppConstants.AnimationDuration.short)) {
+                showThoughtBubble = false
+            }
+            
+            thoughtTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(AppConstants.AnimationDuration.short * 1_000_000_000))
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    self.currentThought = ThoughtGenerator.randomThought(excluding: self.lastThought)
-                    self.lastThought = self.currentThought
-                    
-                    withAnimation(.easeIn(duration: 0.2)) {
-                        self.showThoughtBubble = true
-                    }
-                }
-            } else {
+                guard !Task.isCancelled else { return }
+                
                 currentThought = ThoughtGenerator.randomThought(excluding: lastThought)
                 lastThought = currentThought
                 
-                withAnimation(.easeIn(duration: 0.3)) {
+                withAnimation(.easeIn(duration: AppConstants.AnimationDuration.short)) {
                     showThoughtBubble = true
                 }
             }
+        } else {
+            currentThought = ThoughtGenerator.randomThought(excluding: lastThought)
+            lastThought = currentThought
+            
+            withAnimation(.easeIn(duration: AppConstants.AnimationDuration.medium)) {
+                showThoughtBubble = true
+            }
         }
     }
+    
+    deinit {
+        thoughtTask?.cancel()
+    }
+}

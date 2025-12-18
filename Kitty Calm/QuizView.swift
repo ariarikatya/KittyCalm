@@ -9,7 +9,7 @@ struct QuizQuestion {
 
 struct QuizView: View {
     @EnvironmentObject private var themeManager: ThemeManager
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
     
     @State private var questions: [QuizQuestion] = QuizView.makeQuestions()
     @State private var currentIndex: Int = 0
@@ -17,8 +17,9 @@ struct QuizView: View {
     @State private var hasAnswered: Bool = false
     @State private var showResult: Bool = false
     
-    private var currentQuestion: QuizQuestion {
-        questions[currentIndex]
+    private var currentQuestion: QuizQuestion? {
+        guard currentIndex < questions.count else { return nil }
+        return questions[currentIndex]
     }
     
     var body: some View {
@@ -28,52 +29,59 @@ struct QuizView: View {
             
             if showResult {
                 QuizResultView(onDone: {
-                    presentationMode.wrappedValue.dismiss()
+                    dismiss()
                 })
-            } else {
+            } else if let question = currentQuestion {
                 VStack(spacing: 24) {
                     Text("Cat Curious Quiz")
                         .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        .foregroundColor(AppConstants.Colors.textPrimary)
                         .padding(.top, 24)
+                        .accessibilityAddTraits(.isHeader)
                     
                     Text("Question \(currentIndex + 1) of \(questions.count)")
                         .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                        .foregroundColor(AppConstants.Colors.textSecondary)
+                        .accessibilityLabel("Question \(currentIndex + 1) of \(questions.count)")
                     
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(currentQuestion.question)
+                        Text(question.question)
                             .font(.system(size: 20, weight: .semibold, design: .rounded))
-                            .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                            .foregroundColor(AppConstants.Colors.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
                         
-                        ForEach(currentQuestion.options.indices, id: \.self) { index in
+                        ForEach(question.options.indices, id: \.self) { index in
                             AnswerButton(
-                                text: currentQuestion.options[index],
+                                text: question.options[index],
                                 isSelected: selectedIndex == index,
                                 showResult: hasAnswered,
-                                isCorrect: index == currentQuestion.correctIndex
+                                isCorrect: index == question.correctIndex
                             ) {
                                 guard !hasAnswered else { return }
                                 selectedIndex = index
                                 hasAnswered = true
                             }
+                            .accessibilityLabel("Option \(index + 1): \(question.options[index])")
+                            .accessibilityHint(index == question.correctIndex ? "This is the correct answer" : "")
                         }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     
-                    if hasAnswered {
+                    if hasAnswered, let selectedIndex = selectedIndex {
                         VStack(spacing: 8) {
-                            Text(selectedIndex == currentQuestion.correctIndex ? "Paw-sitively right!" : "Nice try, tiny human.")
+                            Text(selectedIndex == question.correctIndex ? "Paw-sitively right!" : "Nice try, tiny human.")
                                 .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                .foregroundColor(Color(red: 0.3, green: 0.4, blue: 0.2))
+                                .foregroundColor(AppConstants.Colors.textSuccess)
+                                .accessibilityAddTraits(selectedIndex == question.correctIndex ? .isHeader : [])
                             
-                            Text(currentQuestion.fact)
+                            Text(question.fact)
                                 .font(.system(size: 15, weight: .regular, design: .rounded))
-                                .foregroundColor(Color(red: 0.25, green: 0.25, blue: 0.25))
+                                .foregroundColor(AppConstants.Colors.textTertiary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 24)
+                                .accessibilityLabel("Fun fact: \(question.fact)")
                         }
                         .transition(.opacity)
                     }
@@ -84,7 +92,7 @@ struct QuizView: View {
                         if currentIndex == questions.count - 1 {
                             showResult = true
                         } else {
-                            withAnimation(.easeInOut(duration: 0.25)) {
+                            withAnimation(.easeInOut(duration: AppConstants.AnimationDuration.short)) {
                                 currentIndex += 1
                                 selectedIndex = nil
                                 hasAnswered = false
@@ -95,6 +103,7 @@ struct QuizView: View {
                     .padding(.bottom, 32)
                     .disabled(!hasAnswered)
                     .opacity(hasAnswered ? 1.0 : 0.5)
+                    .accessibilityHint(hasAnswered ? "" : "Answer a question to continue")
                 }
             }
         }
@@ -224,21 +233,21 @@ struct QuizView: View {
         
         private var backgroundColour: Color {
             if showResult {
-                return isCorrect ? Color(red: 0.80, green: 0.93, blue: 0.82) : Color.white
+                return isCorrect ? AppConstants.Colors.correctAnswerBackground : Color.white
             }
-            return isSelected ? Color(red: 0.90, green: 0.92, blue: 0.96) : Color.white
+            return isSelected ? AppConstants.Colors.selectedBackground : Color.white
         }
         
         private var foregroundColour: Color {
             if showResult && isCorrect {
-                return Color(red: 0.12, green: 0.35, blue: 0.20)
+                return AppConstants.Colors.textSuccessDark
             }
-            return Color(red: 0.2, green: 0.2, blue: 0.2)
+            return AppConstants.Colors.textPrimary
         }
         
         private var shadowColour: Color {
             if showResult && isCorrect {
-                return Color(red: 0.12, green: 0.35, blue: 0.20)
+                return AppConstants.Colors.textSuccessDark
             }
             return Color.black
         }
@@ -259,13 +268,14 @@ struct QuizView: View {
                 
                 Text("Purr-fect effort!")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                    .foregroundColor(AppConstants.Colors.textPrimary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
+                    .accessibilityAddTraits(.isHeader)
                 
                 Text("Here is a special kitten just for you.")
                     .font(.system(size: 17, weight: .regular, design: .rounded))
-                    .foregroundColor(Color(red: 0.25, green: 0.25, blue: 0.25))
+                    .foregroundColor(AppConstants.Colors.textTertiary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                 
@@ -275,6 +285,7 @@ struct QuizView: View {
                     .frame(maxWidth: 260, maxHeight: 320)
                     .shadow(color: Color.black.opacity(0.18), radius: 18, x: 0, y: 10)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Reward kitten image")
                 
                 Spacer()
                 
