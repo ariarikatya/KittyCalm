@@ -10,6 +10,7 @@ enum MascotPose: CaseIterable {
     case helloWave
     case wavingHands
     case blink
+    case purring
 
     var imageName: String {
         switch self {
@@ -22,6 +23,7 @@ enum MascotPose: CaseIterable {
         case .helloWave:    return "hello_wave"
         case .wavingHands:  return "waving_hands"
         case .blink:        return "blink"
+        case .purring:      return "purring"
         }
     }
 

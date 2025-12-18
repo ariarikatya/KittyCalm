@@ -8,29 +8,48 @@
 import Foundation
 
 struct ThoughtGenerator {
-    private static let thoughts = [
+
+    private static let thoughts: [String] = [
+        // Calm / cozy
         "I deserve a nap.",
+        "This spot is warm and perfect.",
+        "Slow breaths. Like this.",
+        "Everything feels soft right now.",
+        "The world can wait.",
+        "I'm cozy. Stay here.",
+        
+        // Attitude / funny
         "Pet me. Or don't. I'll decide.",
-        "This spot is acceptable.",
         "I was not asleep.",
-        "The sunbeam is mine now.",
         "You may continue.",
-        "I require attention.",
-        "This is fine. For now.",
-        "I'm judging your choices.",
-        "The box is calling to me.",
         "I'll allow this.",
-        "I'm plotting something.",
+        "I'm judging your choices.",
         "You're lucky I'm here.",
-        "I need more treats.",
+        "This is fine. For now.",
+        
+        // Curious
         "The window is interesting.",
-        "I'm not ignoring you. I'm busy.",
-        "This pillow is mine.",
-        "I'll think about it.",
+        "Something moved. I felt it.",
         "The red dot must be caught.",
-        "I'm the boss here."
+        "What is that sound?",
+        "The box is calling to me.",
+        "I must investigate.",
+        
+        // Needy / cute
+        "I require attention.",
+        "I need more treats.",
+        "Stay with me a little longer.",
+        "Touch my head. Yes, there.",
+        "Don't stop.",
+        
+        // Silly
+        "I forgot what I was thinking.",
+        "I'm plotting something.",
+        "I'm the boss here.",
+        "This pillow is mine.",
+        "I'll think about it."
     ]
-    
+
     static func randomThought(excluding: String?) -> String {
         var availableThoughts = thoughts
         if let excluding = excluding {
@@ -38,4 +57,4 @@ struct ThoughtGenerator {
         }
         return availableThoughts.randomElement() ?? "I deserve a nap."
     }
-}
+    }

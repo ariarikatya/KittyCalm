@@ -42,29 +42,35 @@ struct ContentView: View {
                             // Accessories toggles
                             HStack(spacing: 12) {
                                 ToggleButton(
-                                    title: "Glasses",
-                                    isOn: kittenViewModel.showGlasses
+                                    title: "Hearts",
+                                    isOn: kittenViewModel.showHearts
                                 ) {
                                     withAnimation {
-                                        kittenViewModel.showGlasses.toggle()
+                                        kittenViewModel.showHearts.toggle()
+                                        if kittenViewModel.showHearts {
+                                            kittenViewModel.showStars = false
+                                        }
                                     }
                                 }
                                 
                                 ToggleButton(
-                                    title: "Hat",
-                                    isOn: kittenViewModel.showHat
+                                    title: "Stars",
+                                    isOn: kittenViewModel.showStars
                                 ) {
                                     withAnimation {
-                                        kittenViewModel.showHat.toggle()
+                                        kittenViewModel.showStars.toggle()
+                                        if kittenViewModel.showStars {
+                                            kittenViewModel.showHearts = false
+                                        }
                                     }
                                 }
                                 
                                 ToggleButton(
-                                    title: "Collar",
-                                    isOn: kittenViewModel.showCollar
+                                    title: "Purring",
+                                    isOn: kittenViewModel.isPurring
                                 ) {
                                     withAnimation {
-                                        kittenViewModel.showCollar.toggle()
+                                        kittenViewModel.isPurring.toggle()
                                     }
                                 }
                             }

@@ -9,6 +9,12 @@ import SwiftUI
 import AVFoundation
 import UIKit
 
+enum MascotAnimationState {
+    case idle
+    case interacting
+    case purring
+}
+
 struct KittenView: View {
 
     @EnvironmentObject var viewModel: KittenViewModel
@@ -17,7 +23,7 @@ struct KittenView: View {
     @State private var currentPose: MascotPose = .seated
     @State private var baseScale: CGFloat = 1.0
     @State private var rotation: Double = 0
-    @State private var tailAngle: Double = 0
+    @State private var animationState: MascotAnimationState = .idle
 
     // MARK: - Interaction state
     @State private var isAnimating = false
@@ -47,98 +53,92 @@ struct KittenView: View {
 
             ZStack {
 
-                // MARK: - Tail (behind kitten)
-                Image("tail_idle")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: kittenHeight * 0.4)
-                    .offset(x: 40, y: kittenHeight * 0.25)
-                    .rotationEffect(.degrees(tailAngle), anchor: .bottom)
+                Image(viewModel.isPurring ? "purring" : currentPose.imageName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: kittenHeight * currentPose.heightMultiplier)
+                                    .scaleEffect(baseScale)
+                                    .rotationEffect(.degrees(rotation))
 
-                // MARK: - Kitten
-                Image(currentPose.imageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: kittenHeight * currentPose.heightMultiplier)
-                    .scaleEffect(baseScale)
-                    .rotationEffect(.degrees(rotation))
+                                // MARK: - Accessories - убираем этот блок
+                                
+                                // MARK: - Hearts effect
+                                if viewModel.showHearts {
+                                    HeartsEffect()
+                                }
+                                
+                                // MARK: - Stars effect
+                                if viewModel.showStars {
+                                    StarsEffect()
+                                }
 
-                // MARK: - Accessories
-                accessoriesView
+                                // MARK: - Thought bubble
+                                if viewModel.showThoughtBubble {
+                                    ThoughtBubble(text: viewModel.currentThought)
+                                        .offset(y: -kittenHeight * 0.75)
+                                        .transition(.opacity.combined(with: .scale))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
 
-                // MARK: - Thought bubble
-                if viewModel.showThoughtBubble {
-                    ThoughtBubble(text: viewModel.currentThought)
-                        .offset(y: -kittenHeight * 0.75)
-                        .transition(.opacity.combined(with: .scale))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
-
-            // MARK: - Tap (random animation)
-            .onTapGesture {
-                handleTap()
-            }
+                            // MARK: - Tap (random animation или возврат из purring)
+                            .onTapGesture {
+                                if viewModel.isPurring {
+                                    viewModel.isPurring = false
+                                    stopPurring()
+                                } else {
+                                    handleTap()
+                                }
+                            }
 
             // MARK: - Petting (drag = purr)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !isPetting {
-                            isPetting = true
-                            startPurring()
-                            haptic.impactOccurred()
-                        }
-                    }
-                    .onEnded { _ in
-                        stopPurring()
-                        isPetting = false
-                    }
-            )
+                            .gesture(
+                                            DragGesture(minimumDistance: 0)
+                                                .onChanged { _ in
+                                                    if animationState != .purring {
+                                                        animationState = .purring
+                                                        startPurring()
+                                                        haptic.impactOccurred()
+                                                    }
+                                                }
 
-            // MARK: - Idle animations
-            .onAppear {
-                startBreathing()
-                startTailWag()
-                startBlinking()
-            }
-            .onDisappear {
-                blinkTask?.cancel()
-            }
-        }
-    }
+                                                .onEnded { _ in
+                                                    if !viewModel.isPurring {
+                                                        stopPurring()
+                                                    }
+                                                    isPetting = false
+                                                }
+                                        )
 
-    // MARK: - Accessories View
-    private var accessoriesView: some View {
-        ZStack {
-            if viewModel.showGlasses {
-                Image("glasses_overlay")
-                    .resizable()
-                    .scaledToFit()
-            }
+                                        // MARK: - Idle animations
+                                        .onAppear {
+                                            startBreathing()
+                                            // убираем startTailWag()
+                                            startBlinking()
+                                        }
+                                        .onDisappear {
+                                            blinkTask?.cancel()
+                                        }
+                                        .onChange(of: viewModel.isPurring) { _, newValue in
+                                            if newValue {
+                                                animationState = .purring
+                                                startPurring()
+                                            } else {
+                                                animationState = .idle
+                                                stopPurring()
+                                            }
+                                        }
+                                    }
+                                }
 
-            if viewModel.showHat {
-                Image("hat_overlay")
-                    .resizable()
-                    .scaledToFit()
-                    .offset(y: -40)
-            }
+                                // Убираем accessoriesView
 
-            if viewModel.showCollar {
-                Image("collar_overlay")
-                    .resizable()
-                    .scaledToFit()
-                    .offset(y: 40)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    // MARK: - Tap animation
+                                // MARK: - Tap animation
     private func handleTap() {
-        guard !isAnimating else { return }
-        isAnimating = true
+        guard animationState == .idle else { return }
+
+        animationState = .interacting
 
         let randomPose = tapPoses.randomElement() ?? .shy
 
@@ -156,47 +156,40 @@ struct KittenView: View {
                 baseScale = 1.0
                 rotation = 0
             }
-            isAnimating = false
+
+            animationState = .idle
         }
     }
 
-    // MARK: - Breathing
+
+                                // MARK: - Breathing
     private func startBreathing() {
         withAnimation(
             .easeInOut(duration: 2.8)
                 .repeatForever(autoreverses: true)
         ) {
-            baseScale = 1.03
+            if animationState == .idle {
+                baseScale = 1.03
+            }
         }
     }
-
-    // MARK: - Tail wag
-    private func startTailWag() {
-        withAnimation(
-            .easeInOut(duration: 1.8)
-                .repeatForever(autoreverses: true)
-        ) {
-            tailAngle = 12
-        }
-    }
-
-    // MARK: - Blinking
+                                // MARK: - Blinking
     private func startBlinking() {
         blinkTask?.cancel()
 
         blinkTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(
-                    nanoseconds: UInt64.random(in: 3_000_000_000...6_000_000_000)
+                    nanoseconds: UInt64.random(in: 4_000_000_000...8_000_000_000)
                 )
 
-                guard !isAnimating else { continue }
+                guard animationState == .idle else { continue }
 
                 await MainActor.run {
                     currentPose = .blink
                 }
 
-                try? await Task.sleep(nanoseconds: 160_000_000)
+                try? await Task.sleep(nanoseconds: 220_000_000)
 
                 await MainActor.run {
                     currentPose = .seated
@@ -205,18 +198,149 @@ struct KittenView: View {
         }
     }
 
+
+                                // MARK: - Purring
     // MARK: - Purring
     private func startPurring() {
-        guard let url = Bundle.main.url(forResource: "purr", withExtension: "mp3") else { return }
-
-        purrPlayer = try? AVAudioPlayer(contentsOf: url)
-        purrPlayer?.numberOfLoops = -1
-        purrPlayer?.volume = 0.35
-        purrPlayer?.play()
+        guard let url = Bundle.main.url(forResource: "purr", withExtension: "mp3") else {
+            print("❌ Purr sound file not found!")
+            return
+        }
+        
+        do {
+            // Настроим аудио сессию
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            
+            purrPlayer = try AVAudioPlayer(contentsOf: url)
+            purrPlayer?.numberOfLoops = -1
+            purrPlayer?.volume = 0.5  // Увеличил громкость с 0.35 до 0.5
+            purrPlayer?.prepareToPlay()
+            purrPlayer?.play()
+            
+            print("✅ Purr sound started playing")
+        } catch {
+            print("❌ Error playing purr sound: \(error.localizedDescription)")
+        }
     }
 
     private func stopPurring() {
         purrPlayer?.stop()
         purrPlayer = nil
+        print("⏹️ Purr sound stopped")
     }
-}
+                            }
+
+                            // MARK: - Hearts Effect
+                            struct HeartsEffect: View {
+                                @State private var hearts: [HeartParticle] = []
+                                
+                                var body: some View {
+                                    ZStack {
+                                        ForEach(hearts) { heart in
+                                            Text("❤️")
+                                                .font(.system(size: heart.size))
+                                                .offset(x: heart.x, y: heart.y)
+                                                .opacity(heart.opacity)
+                                                .scaleEffect(heart.scale)
+                                        }
+                                    }
+                                    .onAppear {
+                                        startHeartAnimation()
+                                    }
+                                }
+                                
+                                private func startHeartAnimation() {
+                                    Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { timer in
+                                        let newHeart = HeartParticle(
+                                            x: CGFloat.random(in: -120...120),
+                                            y: CGFloat.random(in: -150...150),
+                                            size: CGFloat.random(in: 20...40)
+                                        )
+                                        hearts.append(newHeart)
+                                        
+                                        withAnimation(.easeOut(duration: 2.0)) {
+                                            if let index = hearts.firstIndex(where: { $0.id == newHeart.id }) {
+                                                hearts[index].opacity = 0
+                                                hearts[index].y -= 50
+                                                hearts[index].scale = 1.5
+                                            }
+                                        }
+                                        
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                            hearts.removeAll { $0.id == newHeart.id }
+                                        }
+                                        
+                                        if hearts.isEmpty {
+                                            timer.invalidate()
+                                        }
+                                    }
+                                }
+                            }
+
+                            struct HeartParticle: Identifiable {
+                                let id = UUID()
+                                var x: CGFloat
+                                var y: CGFloat
+                                let size: CGFloat
+                                var opacity: Double = 1.0
+                                var scale: CGFloat = 1.0
+                            }
+
+                            // MARK: - Stars Effect
+                            struct StarsEffect: View {
+                                @State private var stars: [StarParticle] = []
+                                
+                                var body: some View {
+                                    ZStack {
+                                        ForEach(stars) { star in
+                                            Text("⭐")
+                                                .font(.system(size: star.size))
+                                                .offset(x: star.x, y: star.y)
+                                                .opacity(star.opacity)
+                                                .rotationEffect(.degrees(star.rotation))
+                                                .scaleEffect(star.scale)
+                                        }
+                                    }
+                                    .onAppear {
+                                        startStarAnimation()
+                                    }
+                                }
+                                
+                                private func startStarAnimation() {
+                                    Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { timer in
+                                        let newStar = StarParticle(
+                                            x: CGFloat.random(in: -120...120),
+                                            y: CGFloat.random(in: -150...150),
+                                            size: CGFloat.random(in: 18...35)
+                                        )
+                                        stars.append(newStar)
+                                        
+                                        withAnimation(.easeInOut(duration: 1.8)) {
+                                            if let index = stars.firstIndex(where: { $0.id == newStar.id }) {
+                                                stars[index].opacity = 0
+                                                stars[index].rotation = 360
+                                                stars[index].scale = 0.3
+                                            }
+                                        }
+                                        
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                                            stars.removeAll { $0.id == newStar.id }
+                                        }
+                                        
+                                        if stars.isEmpty {
+                                            timer.invalidate()
+                                        }
+                                    }
+                                }
+                            }
+
+                            struct StarParticle: Identifiable {
+                                let id = UUID()
+                                var x: CGFloat
+                                var y: CGFloat
+                                let size: CGFloat
+                                var opacity: Double = 1.0
+                                var rotation: Double = 0
+                                var scale: CGFloat = 1.0
+                            }
